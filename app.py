@@ -241,55 +241,90 @@ elif menu == "Analytics":
     review_counts['no_of_positives'] = review_counts['no_of_positives'].astype(int)
     review_counts['no_of_negatives'] = review_counts['no_of_negatives'].astype(int)
 
+    # --- Chart ---
     fig1, ax1 = plt.subplots(figsize=(12,6))
     width = 0.35
     x = np.arange(len(review_counts['item_name']))
-
     ax1.bar(x - width/2, review_counts['no_of_positives'], width, label='Positive Reviews', color='green')
     ax1.bar(x + width/2, review_counts['no_of_negatives'], width, label='Negative Reviews', color='red')
-
     ax1.set_xticks(x)
     ax1.set_xticklabels(review_counts['item_name'], rotation=45, ha='right')
     ax1.set_ylabel("Number of Reviews")
     ax1.set_title("Positive vs Negative Reviews per Item")
     ax1.legend()
     ax1.grid(axis='y')
-
     st.pyplot(fig1)
 
+    # --- Database Snapshot ---
     st.subheader("Database Snapshot")
     st.dataframe(df)
 
+    # --- Model Performance ---
     st.subheader("📈 Model Performance")
     st.write(f"**Selected Model:** {model_choice}")
-    if not USE_PRETRAINED:
-        X_test, y_test = models_pkg['X_test'], models_pkg['y_test']
-        y_pred = classifier.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-        report = classification_report(y_test, y_pred, target_names=['Negative', 'Positive'])
-        cm = confusion_matrix(y_test, y_pred)
-    else:
-        st.info("Model performance was computed offline when models were trained.")
-        accuracy, report, cm = 0, "Pretrained models loaded.", np.array([[0,0],[0,0]])
 
-    st.write(f"**Accuracy:** {accuracy*100:.2f}%")
-    st.text("Classification Report:")
-    st.text(report)
+    # Retraining button
+    if st.button("🔄 Retrain on Submitted Reviews"):
+        conn = sqlite3.connect('Restaurant_food_data.db')
+        cur = conn.cursor()
+        cur.execute("SELECT item_name, no_of_positives, no_of_negatives FROM item")
+        rows = cur.fetchall()
+        conn.close()
 
-    st.subheader("Confusion Matrix")
-    fig2, ax2 = plt.subplots(figsize=(5,4))
-    im = ax2.imshow(cm, cmap=plt.cm.Blues)
-    ax2.set_title("Confusion Matrix")
-    ax2.set_xlabel("Predicted")
-    ax2.set_ylabel("Actual")
-    classes = ['Negative', 'Positive']
-    ax2.set_xticks(np.arange(len(classes)))
-    ax2.set_yticks(np.arange(len(classes)))
-    ax2.set_xticklabels(classes)
-    ax2.set_yticklabels(classes)
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax2.text(j, i, format(cm[i, j], 'd'),
-                     ha="center", va="center",
-                     color="white" if cm[i, j] > cm.max()/2 else "black")
-    st.pyplot(fig2)
+        # Build dataset from DB
+        reviews, labels = [], []
+        for item, pos, neg in rows:
+            pos, neg = int(pos), int(neg)
+            reviews.extend([f"{item} was good"] * pos)
+            labels.extend([1] * pos)
+            reviews.extend([f"{item} was bad"] * neg)
+            labels.extend([0] * neg)
+
+        if len(reviews) > 4:  # need enough samples
+            from sklearn.model_selection import train_test_split
+            X_train, X_test, y_train, y_test = train_test_split(
+                reviews, labels, test_size=0.2, random_state=42
+            )
+
+            tfidf_new = TfidfVectorizer(max_features=2000)
+            X_train_tfidf = tfidf_new.fit_transform(X_train).toarray()
+            X_test_tfidf = tfidf_new.transform(X_test).toarray()
+
+            # Pick model
+            if model_choice == "Naive Bayes":
+                clf = GaussianNB()
+            elif model_choice == "Random Forest":
+                clf = RandomForestClassifier(n_estimators=200, random_state=0)
+            else:
+                clf = LinearSVC(random_state=0, max_iter=10000)
+
+            clf.fit(X_train_tfidf, y_train)
+            y_pred = clf.predict(X_test_tfidf)
+
+            acc = accuracy_score(y_test, y_pred)
+            report = classification_report(y_test, y_pred, target_names=['Negative','Positive'])
+            cm = confusion_matrix(y_test, y_pred)
+
+            st.success(f"✅ Model retrained. Accuracy: {acc*100:.2f}%")
+            st.text("Classification Report:")
+            st.text(report)
+
+            # Confusion Matrix
+            fig2, ax2 = plt.subplots(figsize=(5,4))
+            im = ax2.imshow(cm, cmap=plt.cm.Blues)
+            ax2.set_title("Confusion Matrix")
+            ax2.set_xlabel("Predicted")
+            ax2.set_ylabel("Actual")
+            classes = ['Negative', 'Positive']
+            ax2.set_xticks(np.arange(len(classes)))
+            ax2.set_yticks(np.arange(len(classes)))
+            ax2.set_xticklabels(classes)
+            ax2.set_yticklabels(classes)
+            for i in range(cm.shape[0]):
+                for j in range(cm.shape[1]):
+                    ax2.text(j, i, format(cm[i, j], 'd'),
+                             ha="center", va="center",
+                             color="white" if cm[i, j] > cm.max()/2 else "black")
+            st.pyplot(fig2)
+        else:
+            st.warning("⚠️ Not enough submitted reviews to retrain.")
