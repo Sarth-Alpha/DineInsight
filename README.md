@@ -61,4 +61,4 @@ Developed by **Sarth Patel** – Passionate about Data Analysis, ML, and buildin
 
 ## 📱 Scan to Try It Out
 
-![QR Code](./qrcode.jpg)
+<img src="./qrcode.png" alt="QR Code" width="50" height="50">
