@@ -56,9 +56,6 @@ The project is fully deployed on **Streamlit Cloud**.
 
 ---
 
-## 👨‍💻 Author  
-Developed by **Sarth Patel** – Passionate about Data Analysis, ML, and building real-world impactful solutions.  
-
 ## 📱 Scan to Try It Out
 
 <img src="./qrcode.jpg" alt="QR Code" width="200" height="200">
