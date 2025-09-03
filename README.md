@@ -58,4 +58,4 @@ The project is fully deployed on **Streamlit Cloud**.
 
 ## 📱 Scan to Try It Out
 
-<img src="./qrcode.jpg" alt="QR Code" width="200" height="200">
+<img src="./qrcode.png" alt="QR Code" width="200" height="200">
